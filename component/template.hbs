@@ -1,8 +1,288 @@
-<section class="horizontal-form">
+{{#if (eq step 1)}}
+  {{#input-text-file
+       classNames="box"
+       label='clusterNew.googlegke.credential.label'
+       value=config.credential
+       accept="text/*, .json"
+       minHeight=60
+       canChangeName=false
+       nameRequired=true
+       placeholder="clusterNew.googlegke.credential.placeholder"
+       fileChosen=(action "clickNext")
+       as |section|
+  }}
+    {{#if (eq section 'description')}}
+      <div class="row help">
+        <div class="col span-12 help-block wrap mb-0">
+          {{t 'clusterNew.googlegke.credential.helpText' htmlSafe=true}}
+        </div>
+      </div>
+    {{/if}}
+  {{/input-text-file}}
 
-  {{!-- This component shows errors produced by validate() in the component --}}
   {{top-errors errors=errors}}
+  {{top-errors errors=otherErrors}}
+  {{top-errors errors=clusterErrors}}
+  {{save-cancel
+      createLabel="clusterNew.googlegke.checkServiceAccount"
+      savingLabel="clusterNew.googlegke.checkingServiceAccount"
+      save=(action "checkServiceAccount")
+      cancel=close
+  }}
 
-  {{!-- This component shows the Create and Cancel buttons --}}
-  {{save-cancel save="save" cancel="cancel"}}
-</section>
+{{else}}
+  {{#accordion-list showExpandAll=false as |al expandFn|}}
+    {{#accordion-list-item
+         title=(t 'clusterNew.customize.title')
+         detail=(t 'clusterNew.customize.detail')
+         everExpanded=true
+         expandOnInit=(eq mode "edit" true false)
+         expandAll=al.expandAll
+         expand=(action expandFn)
+    }}
+      <div class="row">
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.masterVersion.label'}}</label>
+          {{new-select
+              classNames="form-control"
+              content=versionChoices
+              optionValuePath="value"
+              optionLabelPath="value"
+              value=config.masterVersion
+              prompt="clusterNew.googlegke.masterVersion.prompt"
+              localizedPrompt=true
+          }}
+        </div>
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.clusterIpv4Cidr.label'}}</label>
+          {{input
+              value=config.clusterIpv4Cidr
+              placeholder=(t 'clusterNew.googlegke.clusterIpv4Cidr.placeholder')
+              disabled=editing
+          }}
+        </div>
+      </div>
+      <div class="row">
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.alphaFeatures.label'}}</label>
+          <div class="form-control-static">
+            <label class="mr-20 hand">
+              {{radio-button
+                  selection=config.enableAlphaFeature
+                  value=true
+                  disabled=editing
+              }} {{t 'generic.enabled'}}
+            </label>
+            <label class="hand">
+              {{radio-button
+                  selection=config.enableAlphaFeature
+                  value=false
+                  disabled=editing
+              }} {{t 'generic.disabled'}}
+            </label>
+          </div>
+        </div>
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.legacyAuth.label'}}</label>
+          <div class="form-control-static">
+            <label class="mr-20 hand">
+              {{radio-button
+                  selection=config.enableLegacyAbac
+                  value=true
+                  disabled=editing
+              }} {{t 'generic.enabled'}}
+            </label>
+            <label class="hand">
+              {{radio-button
+                  selection=config.enableLegacyAbac
+                  value=false
+                  disabled=editing
+              }} {{t 'generic.disabled'}}
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.stackDriverLogging.label'}}</label>
+          <div class="form-control-static">
+            <label class="hand">
+              {{radio-button
+                  selection=config.enableStackdriverLogging
+                  value=true
+                  disabled=editing
+              }} {{t 'generic.enabled'}}
+            </label>
+            <label class="mr-20 hand">
+              {{radio-button
+                  selection=config.enableStackdriverLogging
+                  value=false
+                  disabled=editing
+              }} {{t 'generic.disabled'}}
+            </label>
+          </div>
+        </div>
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.stackdriverMonitor.label'}}</label>
+          <div class="form-control-static">
+            <label class="hand">
+              {{radio-button
+                  selection=config.enableStackdriverMonitoring
+                  value=true
+                  disabled=editing
+              }} {{t 'generic.enabled'}}
+            </label>
+            <label class="mr-20 hand">
+              {{radio-button
+                  selection=config.enableStackdriverMonitoring
+                  value=false
+                  disabled=editing
+              }} {{t 'generic.disabled'}}
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.dashboard.label'}}</label>
+          <div class="form-control-static">
+            <label class="mr-20 hand">
+              {{radio-button
+                  selection=config.enableKubernetesDashboard
+                  value=true
+                  disabled=editing
+              }} {{t 'generic.enabled'}}
+            </label>
+            <label class="hand">
+              {{radio-button
+                  selection=config.enableKubernetesDashboard
+                  value=false
+                  disabled=editing
+              }} {{t 'generic.disabled'}}
+            </label>
+          </div>
+        </div>
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.httpLB.label'}}</label>
+          <div class="form-control-static">
+            <label class="hand">
+              {{radio-button
+                  selection=config.enableHttpLoadBalancing
+                  value=true
+                  disabled=editing
+              }} {{t 'generic.enabled'}}
+            </label>
+            <label class="mr-20 hand">
+              {{radio-button
+                  selection=config.enableHttpLoadBalancing
+                  value=false
+                  disabled=editing
+              }} {{t 'generic.disabled'}}
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.enableHorizontalPodAutoscaling.label'}}</label>
+          <div class="form-control-static">
+            <label class="hand">
+              {{radio-button
+                  selection=config.enableHorizontalPodAutoscaling
+                  value=true
+                  disabled=editing
+              }} {{t 'generic.enabled'}}
+            </label>
+            <label class="mr-20 hand">
+              {{radio-button
+                  selection=config.enableHorizontalPodAutoscaling
+                  value=false
+                  disabled=editing
+              }} {{t 'generic.disabled'}}
+            </label>
+          </div>
+        </div>
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.maintenanceWindow.label'}}</label>
+          <div class="form-control-static">
+            {{new-select
+                classNames="form-control"
+                content=maintenanceWindowTimes
+                value=config.maintenanceWindow
+            }}
+
+          </div>
+        </div>
+      </div>
+    {{/accordion-list-item}}
+
+    {{#accordion-list-item
+         title=(t 'clusterNew.nodes.title')
+         detail=(t 'clusterNew.nodes.detail')
+         showExpand=false
+         expandOnInit=true
+         expandAll=al.expandAll
+         expand=(action expandFn)
+    }}
+      <div class="row">
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.zone.label'}}</label>
+          {{#if editing}}
+            {{config.zone}}
+          {{else}}
+            {{new-select
+                classNames="form-control"
+                optionValuePath="name"
+                optionLabelPath="name"
+                content=zoneChoices
+                value=config.zone
+                prompt="clusterNew.googlegke.zone.prompt"
+                localizedPrompt=true
+            }}
+          {{/if}}
+        </div>
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.machineType.label'}}</label>
+          {{#if editing}}
+            <div>
+              {{editedMachineChoice.displayName}}
+            </div>
+          {{else}}
+            {{new-select
+                classNames="form-control"
+                optionValuePath="name"
+                optionLabelPath="displayName"
+                content=machineChoices
+                value=config.machineType
+                prompt="clusterNew.googlegke.machineType.prompt"
+                localizedPrompt=true
+            }}
+          {{/if}}
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.nodeCount.label'}}</label>
+          {{input-number min=1 value=config.nodeCount}}
+        </div>
+        <div class="col span-6">
+          <label class="acc-label">{{t 'clusterNew.googlegke.diskSizeGb.label'}}</label>
+          <div class="input-group">
+            {{#if editing}}
+              {{config.diskSizeGb}}{{t 'generic.gigabyte'}}
+            {{else}}
+              {{input-number min=1 value=config.diskSizeGb}}
+              <span class="input-group-addon bg-default">{{t 'generic.gigabyte'}}</span>
+            {{/if}}
+          </div>
+        </div>
+      </div>
+    {{/accordion-list-item}}
+  {{/accordion-list}}
+
+  {{top-errors errors=errors}}
+  {{top-errors errors=otherErrors}}
+  {{top-errors errors=clusterErrors}}
+  {{save-cancel editing=(eq mode 'edit')  save="driverSave" cancel=close}}
+{{/if}}
