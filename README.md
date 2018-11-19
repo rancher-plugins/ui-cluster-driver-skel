@@ -1,6 +1,9 @@
 # ui-plugable-cluster-driver
 Skeleton Rancher UI driver for custom Kubernetes cluster drivers
 
+NOTE: This is a working example of a plugable cluster driver which uses [this driver](https://github.com/rancher/kontainer-engine-example-driver/releases/download/v0.1.0/kontainer-engine-example-driver-linux) as its cluster driver.
+This is a port of the built-in Google GKE driver and simply exists as an example of how to build your own cluster driver. Do not use in production.
+
 ## Setup
 
 * Fork this repository into your own account as `ui-cluster-driver-DRIVERNAME`
