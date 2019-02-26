@@ -12,13 +12,15 @@ const LAYOUT;
 
 /*!!!!!!!!!!!GLOBAL CONST START!!!!!!!!!!!*/
 // EMBER API Access - if you need access to any of the Ember API's add them here in the same manner rather then import them via modules, since the dependencies exist in rancher we dont want to expor the modules in the amd def
-const computed     = Ember.computed;
-const observer     = Ember.observer;
-const get          = Ember.get;
-const set          = Ember.set;
-const alias        = Ember.computed.alias;
-const service      = Ember.inject.service;
-const all          = Ember.RSVP.all;
+const computed      = Ember.computed;
+const observer      = Ember.observer;
+const get           = Ember.get;
+const set           = Ember.set;
+const setProperties = Ember.setProperties;
+const alias         = Ember.computed.alias;
+const service       = Ember.inject.service;
+const all           = Ember.RSVP.all;
+const reject        = Ember.RSVP.reject;
 
 /*!!!!!!!!!!!GLOBAL CONST END!!!!!!!!!!!*/
 
@@ -59,7 +61,32 @@ const times = [
     value: '21:00',
     label: '9:00PM',
   },
-];
+]
+
+const imageType = [
+  {
+    label: 'clusterNew.googlegke.imageType.UBUNTU',
+    value: 'UBUNTU',
+  },
+  {
+    label: 'clusterNew.googlegke.imageType.COS',
+    value: 'COS'
+  },
+]
+
+const diskType = [
+  {
+    label: 'clusterNew.googlegke.diskType.pd-standard',
+    value: 'pd-standard',
+  },
+  {
+    label: 'clusterNew.googlegke.diskType.pd-ssd',
+    value: 'pd-ssd',
+  }
+]
+
+const DEFAULT_AUTH_SCOPES = ['devstorage.read_only', 'logging.write', 'monitoring', 'servicecontrol', 'service.management.readonly', 'trace.append']
+
 
 
 /*!!!!!!!!!!!DO NOT CHANGE START!!!!!!!!!!!*/
@@ -87,7 +114,7 @@ export default Ember.Component.extend(ClusterDriver, {
 
 
     if ( !config ) {
-      config = this.get('globalStore').createRecord({
+      config = get(this, 'globalStore').createRecord({
         type:               configField,
         diskSizeGb:         100,
         enableAlphaFeature: false,
@@ -95,13 +122,84 @@ export default Ember.Component.extend(ClusterDriver, {
         machineType:        'g1-small',
         zone:               'us-central1-f',
         clusterIpv4Cidr:    '',
+        minNodeCount:       1,
+        maxNodeCount:       1,
+        imageType:          'UBUNTU',
+        diskType:           'pd-standard',
+        taints:             [],
       });
 
       set(this, `cluster.${ configField }`, config);
+
+      setProperties(this, {
+        oauthScopesSelection:       'default',
+        scopeConfig:                {
+          userInfo:                 'none',
+          computeEngine:            'none',
+          storage:                  'devstorage.read_only',
+          taskQueue:                'none',
+          bigQuery:                 'none',
+          cloudSQL:                 'none',
+          cloudDatastore:           'none',
+          stackdriverLoggingAPI:    'logging.write',
+          stackdriverMonitoringAPI: 'monitoring',
+          cloudPlatform:            'none',
+          bigtableData:             'none',
+          bigtableAdmin:            'none',
+          cloudPub:                 'none',
+          serviceControl:           'none',
+          serviceManagement:        'service.management.readonly',
+          stackdriverTrace:         'trace.append',
+          cloudSourceRepositories:  'none',
+          cloudDebugger:            'none'
+        },
+        resourceLabels: [],
+        labels:         [],
+        taints:         [],
+      })
+    } else {
+      const {
+        resourceLabels = [], labels = [], taints = []
+      } = config
+      let map = {}
+
+      if (resourceLabels) {
+        resourceLabels.map((t = '') => {
+          const split = t.split('=')
+
+          set(map, split[0], split[1])
+        })
+        set(this, 'resourceLabels', map)
+      }
+
+      if (labels) {
+        labels.map((t = '') => {
+          const split = t.split('=')
+
+          set(map, split[0], split[1])
+        })
+        set(this, 'labels', map)
+      }
+
+      if (taints) {
+        let _taints = taints.map((t = '') => {
+          const splitEffect = t.split(':')
+          const splitLabel = (splitEffect[1] || '').split('=')
+
+          return {
+            effect: splitEffect[0],
+            key:    splitLabel[0],
+            value:  splitLabel[1],
+          }
+        })
+
+        set(this, 'taints', _taints)
+      } else {
+        set(this, 'taints', [])
+      }
     }
 
     set(this, 'initialMasterVersion', get(this, 'config.masterVersion'));
-
   },
 
   config: alias('cluster.%%DRIVERNAME%%EngineConfig'),
@@ -113,6 +211,12 @@ export default Ember.Component.extend(ClusterDriver, {
 
   initialMasterVersion:   null,
   maintenanceWindowTimes: times,
+  eipIdContent:           [],
+  imageTypeContent:       imageType,
+  clusterAdvanced:        false,
+  nodeAdvanced:           false,
+  diskTypeContent:        diskType,
+  scopeConfig:            {},
 
   actions: {
     save() {},
