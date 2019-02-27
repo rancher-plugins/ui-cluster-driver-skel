@@ -21,6 +21,7 @@ const alias         = Ember.computed.alias;
 const service       = Ember.inject.service;
 const all           = Ember.RSVP.all;
 const reject        = Ember.RSVP.reject;
+const resolve        = Ember.RSVP.resolve;
 
 /*!!!!!!!!!!!GLOBAL CONST END!!!!!!!!!!!*/
 
@@ -93,8 +94,10 @@ const DEFAULT_AUTH_SCOPES = ['devstorage.read_only', 'logging.write', 'monitorin
 export default Ember.Component.extend(ClusterDriver, {
   driverName:  '%%DRIVERNAME%%',
   configField: '%%DRIVERNAME%%EngineConfig', // 'googleKubernetesEngineConfig'
+  config:      alias('cluster.%%DRIVERNAME%%EngineConfig'),
   app:         service(),
   router:      service(),
+  layout:      null,
 /*!!!!!!!!!!!DO NOT CHANGE END!!!!!!!!!!!*/
 
   init() {
@@ -115,21 +118,64 @@ export default Ember.Component.extend(ClusterDriver, {
 
     if ( !config ) {
       config = get(this, 'globalStore').createRecord({
-        type:               configField,
-        diskSizeGb:         100,
-        enableAlphaFeature: false,
-        nodeCount:          3,
-        machineType:        'g1-small',
-        zone:               'us-central1-f',
-        clusterIpv4Cidr:    '',
-        minNodeCount:       1,
-        maxNodeCount:       1,
-        imageType:          'UBUNTU',
-        diskType:           'pd-standard',
-        taints:             [],
+        type:                               configField,
+        clusterIpv4Cidr:                    '',
+        description:                        '',
+        diskSizeGb:                         100,
+        diskType:                           'pd-standard',
+        displayName:                        '',
+        enableAlphaFeature:                 false,
+        enableAutoRepair:                   false,
+        enableAutoUpgrade:                  false,
+        enableHorizontalPodAutoscaling:     true,
+        enableHttpLoadBalancing:            true,
+        enableKubernetesDashboard:          false,
+        enableLegacyAbac:                   false,
+        enableMasterAuthorizedNetwork:      false,
+        enableNetworkPolicyConfig:          true,
+        enableNodepoolAutoscaling:          false,
+        enablePrivateEndpoint:              false,
+        enablePrivateNodes:                 false,
+        enableStackdriverLogging:           true,
+        enableStackdriverMonitoring:        true,
+        gkeCredentialPath:                  '',
+        imageType:                          'UBUNTU',
+        ipPolicyClusterIpv4CidrBlock:       '',
+        ipPolicyClusterSecondaryRangeName:  '',
+        ipPolicyCreateSubnetwork:           false,
+        ipPolicyNodeIpv4CidrBlock:          '',
+        ipPolicyServicesIpv4CidrBlock:      '',
+        ipPolicyServicesSecondaryRangeName: '',
+        ipPolicySubnetworkName:             '',
+        issueClientCertificate:             false,
+        kubernetesDashboard:                false,
+        localSsdCount:                      0,
+        machineType:                        'g1-small',
+        maintenanceWindow:                  '',
+        masterIpv4CidrBlock:                '',
+        masterVersion:                      '1.11.7-gke.6',
+        maxNodeCount:                       1,
+        minNodeCount:                       1,
+        name:                               '',
+        network:                            'default',
+        nodeCount:                          3,
+        nodePool:                           '',
+        nodeVersion:                        '',
+        preemptible:                        false,
+        projectId:                          '',
+        serviceAccount:                     '',
+        subNetwork:                         '',
+        useIpAliases:                       false,
+        zone:                               'us-central1-f',
+        taints:                             [],
+        credential:                         '',
+        resourceLabels:                     [],
+        labels:                             []
       });
 
       set(this, `cluster.${ configField }`, config);
+
+      set(this, 'cluster.driver', get(this, 'driverName'));
 
       setProperties(this, {
         oauthScopesSelection:       'default',
@@ -202,7 +248,6 @@ export default Ember.Component.extend(ClusterDriver, {
     set(this, 'initialMasterVersion', get(this, 'config.masterVersion'));
   },
 
-  config: alias('cluster.%%DRIVERNAME%%EngineConfig'),
   /*!!!!!!!!!!!DO NOT CHANGE END!!!!!!!!!!!*/
   step:                   1,
   zones:                  null,
@@ -217,13 +262,37 @@ export default Ember.Component.extend(ClusterDriver, {
   nodeAdvanced:           false,
   diskTypeContent:        diskType,
   scopeConfig:            {},
+  isSavingCluster:        false,
 
   actions: {
-    save() {},
-    cancel(){
-      // probably should not remove this as its what every other driver uses to get back
-      get(this, 'router').transitionTo('global-admin.clusters.index');
+    driverSave(cb) {
+      cb = cb || function() {};
+
+      set(this, 'isSavingCluster', true);
+
+      resolve(this.willSave()).then((ok) => {
+        if ( !ok ) {
+          // Validation or something else said not to save
+          cb(false);
+          set(this, 'isSavingCluster', false);
+
+          return;
+        }
+
+        this.sendAction('save', (ok) => {
+          if ( ok ) {
+            this.doneSaving().finally(() => {
+              set(this, 'isSavingCluster', false);
+              cb(ok);
+            });
+          } else {
+            set(this, 'isSavingCluster', false);
+            cb(ok);
+          }
+        });
+      });
     },
+
     clickNext() {
       this.$('BUTTON[type="submit"]').click();
     },
@@ -234,7 +303,10 @@ export default Ember.Component.extend(ClusterDriver, {
       return all([
         this.fetchZones(),
         this.fetchVersions(),
-        this.fetchMachineTypes()
+        this.fetchMachineTypes(),
+        this.fetchNetworks(),
+        this.fetchSubnetworks(),
+        this.fetchServiceAccounts(),
       ]).then(() => {
         set(this, 'step', 2);
         cb(true);
@@ -242,37 +314,36 @@ export default Ember.Component.extend(ClusterDriver, {
         cb(false);
       });
     },
+
+    setLabels(section) {
+      const out = []
+
+      for (let key in section) {
+        out.pushObject(`${ key }=${ section[key] }`)
+      }
+
+      set(this, 'config.resourceLabels', out);
+    },
+
+    setNodeLabels(section) {
+      const out = []
+
+      for (let key in section) {
+        out.pushObject(`${ key }=${ section[key] }`)
+      }
+
+      set(this, 'config.labels', out);
+    },
+
+    updateNameservers(nameservers) {
+      set(this, 'config.masterAuthorizedNetworkCidrBlocks', nameservers);
+    },
+
+    setTaints(value) {
+      set(this, 'config.taints', value);
+    },
   },
 
-
-  // Add custom validation beyond what can be done from the config API schema
-  validate() {
-    // Get generic API validation errors
-    this._super();
-    var errors = get(this, 'errors')||[];
-    if ( !get(this, 'cluster.name') ) {
-      errors.push('Name is required');
-    }
-
-    // Add more specific errors
-
-    // Check something and add an error entry if it fails:
-    // if ( parseInt(get(this, 'config.memorySize'), defaultRadix) < defaultBase ) {
-    //   errors.push('Memory Size must be at least 1024 MB');
-    // }
-
-    // Set the array of errors for display,
-    // and return true if saving should continue.
-    if ( get(errors, 'length') ) {
-      set(this, 'errors', errors);
-      return false;
-    } else {
-      set(this, 'errors', null);
-      return true;
-    }
-  },
-
-  // Any computed properties or custom logic can go here
   credentialChanged: observer('config.credential', function() {
     const str = get(this, 'config.credential');
 
@@ -300,9 +371,12 @@ export default Ember.Component.extend(ClusterDriver, {
       }
     }
 
-    if ( get(this, 'step') >= 2 ) {
+    if (!get(this, 'isSavingCluster')) {
       this.fetchVersions();
       this.fetchMachineTypes();
+      this.fetchNetworks();
+      this.fetchSubnetworks();
+      this.fetchServiceAccounts();
     }
   }),
 
@@ -318,10 +392,42 @@ export default Ember.Component.extend(ClusterDriver, {
   versionChanged: observer('config.masterVersion', 'versionChoices.[]', function() {
     const versions = get(this, 'versionChoices') || [];
     const current = get(this, 'config.masterVersion');
-    const exists = versions.findBy('value', current);
+    const exists = versions[versions.indexOf(current)];
 
     if ( !exists ) {
-      set(this, 'config.masterVersion', versions[0].value);
+      set(this, 'config.masterVersion', versions[0]);
+    }
+  }),
+
+  networkChange: observer('config.network', 'subNetworkContent.[]', function() {
+    const subNetworkContent = get(this, 'subNetworkContent') || []
+
+    if (subNetworkContent.length > 0) {
+      set(this, 'config.subNetwork', subNetworkContent[0] && subNetworkContent[0].value)
+      const secondaryIpRangeContent = get(this, 'secondaryIpRangeContent') || []
+
+      if (secondaryIpRangeContent.length > 0) {
+        const value = secondaryIpRangeContent[0] && secondaryIpRangeContent[0].value
+
+        setProperties(this, {
+          'config.ipPolicyClusterSecondaryRangeName':  value,
+          'config.ipPolicyServicesSecondaryRangeName': value,
+        })
+      }
+    }
+  }),
+
+  secondaryIpRangeContentChange: observer('secondaryIpRangeContent.[]', 'config.useIpAliases', function() {
+    const secondaryIpRangeContent = get(this, 'secondaryIpRangeContent') || []
+
+    if (secondaryIpRangeContent.length === 0) {
+      set(this, 'config.ipPolicyCreateSubnetwork', true)
+    }
+  }),
+
+  useIpAliasesChange: observer('config.useIpAliases', function() {
+    if (!get(this, 'config.useIpAliases')) {
+      set(this, 'config.enablePrivateNodes', false)
     }
   }),
 
@@ -353,35 +459,63 @@ export default Ember.Component.extend(ClusterDriver, {
   }),
 
   versionChoices: computed('versions.validMasterVersions.[]', 'config.masterVersion', function() {
-    const versions = get(this, 'versions');
-
-    if ( !versions ) {
-      return [];
-    }
-
-    const initialMasterVersion = get(this, 'initialMasterVersion');
-    let oldestSupportedVersion = '>=1.8.0';
-
-    if ( initialMasterVersion ) {
-      oldestSupportedVersion = `>=${  initialMasterVersion }`;
-    }
-
-    let out = versions.validMasterVersions.slice();
-
-    out = out.filter((v) => {
-      const str = v.replace(/-.*/, '');
-
-      return satisfies(str, oldestSupportedVersion);
-    });
-
-    if (get(this, 'editing') &&  !out.includes(initialMasterVersion) ) {
-      out.unshift(initialMasterVersion);
-    }
-
-    return out.map((v) => {
-      return { value: v }
-    });
+    return get(this, 'versions.validMasterVersions');
   }),
+
+  locationContent: computed('config.zone', function() {
+    const zone = get(this, 'config.zone')
+    const arr = zone.split('-')
+    const locationName = `${ arr[0] }-${ arr[1] }`
+    const zoneChoices = get(this, 'zoneChoices')
+
+    return zoneChoices.filter((z) => (z.name || '').startsWith(locationName) && z.name !== zone)
+  }),
+
+  networkContent: computed('nerworks', function() {
+    return get(this, 'networks')
+  }),
+
+  subNetworkContent: computed('subNetworks.[]', 'config.network', function() {
+    const subNetworks = get(this, 'subNetworks') || []
+    const networkName = get(this, 'config.network')
+
+    const out = subNetworks.filter((s) => {
+      const { network = '' } = s
+      const arr = network.split('/') || []
+      const networkDisplayName = arr[arr.length - 1]
+
+      if (networkDisplayName === networkName) {
+        return true
+      }
+    })
+
+    return out.map((o) => {
+      return {
+        label:             `${ o.name }(${ o.ipCidrRange })`,
+        value:             o.name,
+        secondaryIpRanges: o.secondaryIpRanges,
+      }
+    })
+  }),
+
+  secondaryIpRangeContent: computed('subNetworkContent.[]', 'config.network', function() {
+    const subNetworkContent = get(this, 'subNetworkContent')
+    const { secondaryIpRanges = [] } = subNetworkContent
+
+    return secondaryIpRanges.map((s) => {
+      return {
+        lable: `${ s.rangeName }(${ s.ipCidrRange })`,
+        value: s.rangeName,
+      }
+    })
+  }),
+
+  serviceAccountContent: computed('serviceAccounts', function() {
+    const serviceAccounts = get(this, 'serviceAccounts')
+
+    return serviceAccounts
+  }),
+
   fetchZones() {
     return get(this, 'globalStore').rawRequest({
       url:    '/meta/gkeZones',
@@ -392,7 +526,15 @@ export default Ember.Component.extend(ClusterDriver, {
       }
     }).then((xhr) => {
       const out = xhr.body.items;
+      const locations = get(this, 'config.locations') || []
 
+      if (locations.length > 0) {
+        out.map((o) => {
+          if (locations.includes(o.name)) {
+            set(o, 'checked', true)
+          }
+        })
+      }
       set(this, 'zones', out);
 
       return out;
@@ -447,4 +589,112 @@ export default Ember.Component.extend(ClusterDriver, {
       return reject();
     });
   },
+
+  fetchNetworks() {
+    return get(this, 'globalStore').rawRequest({
+      url:    '/meta/gkeNetworks',
+      method: 'POST',
+      data:   {
+        credentials: get(this, 'config.credential'),
+        projectId:   get(this, 'config.projectId'),
+        zone:        get(this, 'config.zone'),
+      }
+    }).then((xhr) => {
+      const out = xhr.body.items || [];
+
+      set(this, 'networks', out);
+
+      if (get(this, 'mode') === 'new') {
+        set(this, 'config.network', out[0] && out[0].name)
+      }
+
+      return out;
+    }).catch((xhr) => {
+      set(this, 'errors', [xhr.body.error]);
+
+      return reject();
+    });
+  },
+
+  fetchSubnetworks() {
+    const zone = get(this, 'config.zone')
+    const zoneSplit = zone.split('-')
+
+    return get(this, 'globalStore').rawRequest({
+      url:    '/meta/gkeSubnetworks',
+      method: 'POST',
+      data:   {
+        credentials: get(this, 'config.credential'),
+        projectId:   get(this, 'config.projectId'),
+        region:      `${ zoneSplit[0] }-${ zoneSplit[1] }`,
+      }
+    }).then((xhr) => {
+      const out = xhr.body.items || [];
+
+      set(this, 'subNetworks', out);
+
+      return out;
+    }).catch((xhr) => {
+      set(this, 'errors', [xhr.body.error]);
+
+      return reject();
+    });
+  },
+
+  fetchServiceAccounts() {
+    return get(this, 'globalStore').rawRequest({
+      url:    '/meta/gkeServiceAccounts',
+      method: 'POST',
+      data:   {
+        credentials: get(this, 'config.credential'),
+        projectId:   get(this, 'config.projectId'),
+        zone:        get(this, 'config.zone'),
+      }
+    }).then((xhr) => {
+      const out = xhr.body.accounts || [];
+
+      set(this, 'serviceAccounts', out);
+      const filter = out.filter((o) => o.displayName === 'Compute Engine default service account')
+
+      if (get(this, 'mode') === 'new') {
+        set(this, 'config.serviceAccount', filter[0] && filter[0].uniqueId)
+      }
+
+      return out;
+    }).catch((xhr) => {
+      set(this, 'errors', [xhr.body.error]);
+
+      return reject();
+    });
+  },
+
+  validate() {
+    const model = get(this, 'cluster');
+    const errors = model.validationErrors();
+    const { intl, config = {} } = this
+    const { minNodeCount, maxNodeCount } = config
+
+    if (maxNodeCount < minNodeCount) {
+      errors.pushObject(intl.t('clusterNew.googlegke.maxNodeCount.minError'))
+    }
+
+    if (!get(this, 'cluster.name')) {
+      errors.pushObject(intl.t('clusterNew.name.required'))
+    }
+
+    const taints = get(this, 'taints') || []
+
+    if (taints.length > 0) {
+      const filter = taints.filter((t) => !t.key || !t.value)
+
+      if (filter.length > 0) {
+        errors.pushObject(intl.t('clusterNew.googlegke.taints.required'))
+      }
+    }
+
+    set(this, 'errors', errors);
+
+    return errors.length === 0;
+  },
+
 });
