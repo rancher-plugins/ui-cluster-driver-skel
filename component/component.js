@@ -120,6 +120,7 @@ export default Ember.Component.extend(ClusterDriver, {
       config = get(this, 'globalStore').createRecord({
         type:                               configField,
         clusterIpv4Cidr:                    '',
+        credential:                         '',
         description:                        '',
         diskSizeGb:                         100,
         diskType:                           'pd-standard',
@@ -149,13 +150,15 @@ export default Ember.Component.extend(ClusterDriver, {
         ipPolicySubnetworkName:             '',
         issueClientCertificate:             false,
         kubernetesDashboard:                false,
+        labels:                             [],
         localSsdCount:                      0,
+        locations:                          [],
         machineType:                        'g1-small',
         maintenanceWindow:                  '',
         masterIpv4CidrBlock:                '',
         masterVersion:                      '1.11.7-gke.6',
-        maxNodeCount:                       1,
-        minNodeCount:                       1,
+        maxNodeCount:                       0,
+        minNodeCount:                       0,
         name:                               '',
         network:                            'default',
         nodeCount:                          3,
@@ -163,14 +166,12 @@ export default Ember.Component.extend(ClusterDriver, {
         nodeVersion:                        '',
         preemptible:                        false,
         projectId:                          '',
+        resourceLabels:                     [],
         serviceAccount:                     '',
         subNetwork:                         '',
-        useIpAliases:                       false,
-        zone:                               'us-central1-f',
         taints:                             [],
-        credential:                         '',
-        resourceLabels:                     [],
-        labels:                             []
+        useIpAliases:                       false,
+        zone:                               'us-central1-a',
       });
 
       set(this, `cluster.${ configField }`, config);
